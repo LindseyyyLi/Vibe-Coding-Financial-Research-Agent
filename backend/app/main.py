@@ -5,12 +5,29 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from .agents.manager import ManagerAgent
 import logging
+import asyncio
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+class TimeoutMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        try:
+            return await asyncio.wait_for(call_next(request), timeout=300.0)  # 5 minutes timeout
+        except asyncio.TimeoutError:
+            return JSONResponse(
+                status_code=504,
+                content={"detail": "Request timeout. The operation took too long to complete."}
+            )
+
 app = FastAPI(title="Financial Research Assistant API")
+
+# Add timeout middleware
+app.add_middleware(TimeoutMiddleware)
 
 # Configure CORS
 app.add_middleware(
@@ -50,6 +67,12 @@ async def log_requests(request: Request, call_next):
         response = await call_next(request)
         logger.info(f"Request completed with status code {response.status_code}")
         return response
+    except asyncio.TimeoutError:
+        logger.error("Request timed out")
+        return JSONResponse(
+            status_code=504,
+            content={"detail": "Request timeout. The operation took too long to complete."}
+        )
     except Exception as e:
         logger.error(f"Request failed: {str(e)}", exc_info=True)
         return JSONResponse(
@@ -65,11 +88,23 @@ async def root():
 async def research_company(request: CompanyRequest):
     logger.info(f"Received research request for company: {request.company_name}")
     try:
-        result = await manager.process(request.company_name)
+        result = await asyncio.wait_for(
+            manager.process(request.company_name),
+            timeout=240.0  # 4 minutes timeout for processing
+        )
         if not result.get("company_name"):
             raise ValueError("Failed to get company data")
         logger.info(f"Successfully processed research for {request.company_name}")
         return result
+    except asyncio.TimeoutError:
+        logger.error(f"Research processing timed out for {request.company_name}")
+        raise HTTPException(
+            status_code=504,
+            detail={
+                "error": "Processing timeout",
+                "message": "The research operation took too long to complete. Please try again."
+            }
+        )
     except Exception as e:
         logger.error(f"Failed to process company research: {str(e)}", exc_info=True)
         raise HTTPException(
