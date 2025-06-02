@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     
     class Config:
         case_sensitive = True
+        env_file = ".env"
+        extra = "allow"  # Allow extra fields in the environment
 
 @lru_cache()
 def get_settings() -> Settings:

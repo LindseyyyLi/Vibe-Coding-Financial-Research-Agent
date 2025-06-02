@@ -43,10 +43,10 @@ class RiskAgent(BaseAgent):
         
         Example format:
         {{"risks": [
-            "High debt-to-equity ratio indicates financial risk",
-            "Supply chain concentration in single region",
-            "Increasing market competition from new entrants",
-            "Pending regulatory changes may impact operations"
+                "High debt-to-equity ratio indicates financial risk",
+                "Supply chain concentration in single region",
+                "Increasing market competition from new entrants",
+                "Pending regulatory changes may impact operations"
         ]}}
         
         Return ONLY the JSON object, no other text or formatting."""

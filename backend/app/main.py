@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from .agents.manager import ManagerAgent
 import logging
@@ -23,6 +23,62 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
                 status_code=504,
                 content={"detail": "Request timeout. The operation took too long to complete."}
             )
+
+class CompanyInfo(BaseModel):
+    name: str
+    description: str
+    sector: str
+    industry: str
+
+class FinancialData(BaseModel):
+    revenue: Optional[str] = None
+    gross_profit: Optional[str] = None
+    operating_margin: Optional[str] = None
+    pe_ratio: Optional[str] = None
+    market_cap: Optional[str] = None
+    price: Optional[float] = None
+    change_percent: Optional[float] = None
+    volume: Optional[int] = None
+    week_52_high: Optional[str] = None
+    week_52_low: Optional[str] = None
+
+    class Config:
+        extra = "allow"  # Allow extra fields in the data
+        populate_by_name = True  # Allow both alias and field name to be used
+        json_schema_extra = {
+            "example": {
+                "revenue": "10B",
+                "gross_profit": "5B",
+                "operating_margin": "20%",
+                "pe_ratio": "15",
+                "market_cap": "50B",
+                "price": 150.50,
+                "change_percent": 2.5,
+                "volume": 1000000,
+                "week_52_high": "180.00",
+                "week_52_low": "120.00"
+            }
+        }
+
+class FinancialAnalysis(BaseModel):
+    financial_health: str
+    market_position: str
+    growth_potential: str
+    key_metrics_analysis: str
+
+class NewsItem(BaseModel):
+    title: str
+    description: str
+    url: str
+    publishedAt: str
+
+class CompanyResponse(BaseModel):
+    company_info: CompanyInfo
+    financial_data: FinancialData
+    financial_analysis: FinancialAnalysis
+    potential_risks: List[str]
+    news_data: List[NewsItem]
+    sources: List[str]
 
 app = FastAPI(title="Financial Research Assistant API")
 
@@ -52,13 +108,6 @@ manager = ManagerAgent()
 
 class CompanyRequest(BaseModel):
     company_name: str
-
-class CompanyResponse(BaseModel):
-    company_name: str
-    overview: str
-    financial_metrics: Dict[str, Any]
-    potential_risks: List[str]
-    sources: List[str]
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -92,8 +141,8 @@ async def research_company(request: CompanyRequest):
             manager.process(request.company_name),
             timeout=240.0  # 4 minutes timeout for processing
         )
-        if not result.get("company_name"):
-            raise ValueError("Failed to get company data")
+        if not result.get("company_info", {}).get("name"):
+            raise ValueError("Failed to get company data: Missing company name")
         logger.info(f"Successfully processed research for {request.company_name}")
         return result
     except asyncio.TimeoutError:

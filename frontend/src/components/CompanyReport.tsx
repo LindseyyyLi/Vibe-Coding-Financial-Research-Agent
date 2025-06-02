@@ -8,18 +8,25 @@ interface CompanyData {
         industry: string;
     };
     financial_data: {
+        revenue: string;
+        gross_profit: string;
+        operating_margin: string;
+        pe_ratio: string;
+        market_cap: string;
+        price: string;
+        change_percent: string;
+        volume: string;
+        week_52_high: string;
+        week_52_low: string;
         totalRevenue: string;
         grossProfit: string;
         operatingIncome: string;
         netIncome: string;
         EPS: string;
         PERatio: string;
-        ProfitMargin: string;
         OperatingMarginTTM: string;
-        ReturnOnAssetsTTM: string;
         ReturnOnEquityTTM: string;
-        QuarterlyRevenueGrowthYOY: string;
-        QuarterlyEarningsGrowthYOY: string;
+        ReturnOnAssetsTTM: string;
     };
     market_data: {
         regularMarketPrice: number;
@@ -87,37 +94,28 @@ const CompanyReport: React.FC<CompanyReportProps> = ({ data }) => {
                     <div className="border rounded p-3">
                         <div className="text-sm text-gray-600">Current Price</div>
                         <div className="font-medium text-lg">
-                            ${formatNumber(data.market_data.regularMarketPrice)}
+                            ${formatNumber(data.financial_data.price)}
                             <span className={`ml-2 text-sm ${
-                                data.market_data.regularMarketChangePercent >= 0 
+                                parseFloat(data.financial_data.change_percent) >= 0 
                                 ? 'text-green-600' 
-                                : 'text-red-600'
-                            }`}>
-                                ({formatNumber(data.market_data.regularMarketChangePercent)}%)
+                                : 'text-red-600'}`}>
+                                ({formatNumber(data.financial_data.change_percent)}%)
                             </span>
                         </div>
                     </div>
                     <div className="border rounded p-3">
                         <div className="text-sm text-gray-600">Market Cap</div>
-                        <div className="font-medium">{formatNumber(data.market_data.MarketCapitalization)}</div>
+                        <div className="font-medium">{formatNumber(data.financial_data.market_cap)}</div>
                     </div>
                     <div className="border rounded p-3">
                         <div className="text-sm text-gray-600">Volume</div>
-                        <div className="font-medium">{formatNumber(data.market_data.regularMarketVolume)}</div>
+                        <div className="font-medium">{formatNumber(data.financial_data.volume)}</div>
                     </div>
                     <div className="border rounded p-3">
                         <div className="text-sm text-gray-600">52 Week Range</div>
                         <div className="font-medium">
-                            ${formatNumber(data.market_data["52WeekLow"])} - ${formatNumber(data.market_data["52WeekHigh"])}
+                            ${formatNumber(data.financial_data.week_52_low)} - ${formatNumber(data.financial_data.week_52_high)}
                         </div>
-                    </div>
-                    <div className="border rounded p-3">
-                        <div className="text-sm text-gray-600">Beta</div>
-                        <div className="font-medium">{formatNumber(data.market_data.Beta)}</div>
-                    </div>
-                    <div className="border rounded p-3">
-                        <div className="text-sm text-gray-600">50-Day MA</div>
-                        <div className="font-medium">${formatNumber(data.market_data["50DayMovingAverage"])}</div>
                     </div>
                 </div>
             </section>
@@ -127,11 +125,11 @@ const CompanyReport: React.FC<CompanyReportProps> = ({ data }) => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="border rounded p-3">
                         <div className="text-sm text-gray-600">Revenue (TTM)</div>
-                        <div className="font-medium">${formatNumber(data.financial_data.totalRevenue)}</div>
+                        <div className="font-medium">${formatNumber(data.financial_data.revenue)}</div>
                     </div>
                     <div className="border rounded p-3">
                         <div className="text-sm text-gray-600">Gross Profit</div>
-                        <div className="font-medium">${formatNumber(data.financial_data.grossProfit)}</div>
+                        <div className="font-medium">${formatNumber(data.financial_data.gross_profit)}</div>
                     </div>
                     <div className="border rounded p-3">
                         <div className="text-sm text-gray-600">Operating Income</div>
@@ -147,11 +145,11 @@ const CompanyReport: React.FC<CompanyReportProps> = ({ data }) => {
                     </div>
                     <div className="border rounded p-3">
                         <div className="text-sm text-gray-600">P/E Ratio</div>
-                        <div className="font-medium">{formatNumber(data.financial_data.PERatio)}</div>
+                        <div className="font-medium">{formatNumber(data.financial_data.pe_ratio)}</div>
                     </div>
                     <div className="border rounded p-3">
                         <div className="text-sm text-gray-600">Operating Margin</div>
-                        <div className="font-medium">{formatNumber(data.financial_data.OperatingMarginTTM)}%</div>
+                        <div className="font-medium">{formatNumber(data.financial_data.operating_margin)}%</div>
                     </div>
                     <div className="border rounded p-3">
                         <div className="text-sm text-gray-600">ROE</div>

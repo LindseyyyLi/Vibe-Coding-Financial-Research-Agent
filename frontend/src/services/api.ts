@@ -39,10 +39,16 @@ export interface CompanyData {
         industry: string;
     };
     financial_data: {
-        [key: string]: any;
-    };
-    market_data: {
-        [key: string]: any;
+        revenue: string;
+        gross_profit: string;
+        operating_margin: string;
+        pe_ratio: string;
+        market_cap: string;
+        price: string;
+        change_percent: string;
+        volume: string;
+        '52_week_high': string;
+        '52_week_low': string;
     };
     financial_analysis: {
         financial_health: string;
@@ -57,6 +63,7 @@ export interface CompanyData {
         url: string;
         publishedAt: string;
     }>;
+    sources: string[];
 }
 
 export const analyzeCompany = async (companyName: string): Promise<CompanyData> => {
@@ -70,27 +77,8 @@ export const analyzeCompany = async (companyName: string): Promise<CompanyData> 
                 company_name: companyName
             });
 
-            // Transform the response data if needed
-            const transformedData: CompanyData = {
-                company_info: {
-                    name: response.data.company_info?.name || companyName,
-                    description: response.data.company_info?.description || '',
-                    sector: response.data.company_info?.sector || '',
-                    industry: response.data.company_info?.industry || ''
-                },
-                financial_data: response.data.financial_data || {},
-                market_data: response.data.market_data || {},
-                financial_analysis: {
-                    financial_health: response.data.financial_analysis?.financial_health || '',
-                    market_position: response.data.financial_analysis?.market_position || '',
-                    growth_potential: response.data.financial_analysis?.growth_potential || '',
-                    key_metrics_analysis: response.data.financial_analysis?.key_metrics_analysis || ''
-                },
-                potential_risks: response.data.potential_risks || [],
-                news_data: response.data.news_data || []
-            };
-
-            return transformedData;
+            // Return the data directly since the structure matches
+            return response.data;
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 const isTimeout = error.code === 'ECONNABORTED' || error.message.includes('timeout');
