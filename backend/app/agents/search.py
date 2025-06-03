@@ -8,6 +8,7 @@ import json
 import requests
 from datetime import datetime, timedelta
 import yfinance as yf
+from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -87,25 +88,26 @@ class SearchAgent(BaseAgent):
             if "Global Quote" in quote_data:
                 quote = quote_data["Global Quote"]
                 return {
-                    "price": quote.get("05. price", "N/A"),
-                    "change_percent": quote.get("10. change percent", "N/A").rstrip('%'),
-                    "volume": quote.get("06. volume", "N/A"),
+                    "price": float(quote.get("05. price", 0)),
+                    "change_percent": float(quote.get("10. change percent", "0").rstrip('%')),
+                    "volume": int(quote.get("06. volume", 0)),
                 }
             return {
-                "price": "N/A",
-                "change_percent": "N/A",
-                "volume": "N/A",
+                "price": 0.0,
+                "change_percent": 0.0,
+                "volume": 0,
             }
         except Exception as e:
             logger.error(f"Error processing quote data: {str(e)}")
             return {
-                "price": "N/A",
-                "change_percent": "N/A",
-                "volume": "N/A",
+                "price": 0.0,
+                "change_percent": 0.0,
+                "volume": 0,
             }
 
     async def process(self, company_name: str, search_plan: Dict) -> Dict:
         """Process the search request."""
+        error_details = []
         try:
             logger.info(f"Starting data gathering process for: {company_name}")
             
@@ -117,88 +119,124 @@ class SearchAgent(BaseAgent):
             logger.info(f"Retrieved ticker symbol: {ticker}")
             
             # Get company data
+            overview_data = None
+            
             try:
+                logger.info("Attempting to get data from Alpha Vantage")
                 overview_data = await self._get_company_data_with_retry(ticker)
-            except ValueError as e:
-                if "Alpha Vantage API error" in str(e):
-                    logger.warning("Alpha Vantage API rate limit reached, using Yahoo Finance fallback")
+                if not overview_data:
+                    raise ValueError("Empty response from Alpha Vantage")
+                logger.info(f"Successfully retrieved data from Alpha Vantage: {str(overview_data)[:200]}")
+            except Exception as e:
+                error_msg = f"Alpha Vantage API error: {str(e)}"
+                logger.warning(error_msg)
+                error_details.append(error_msg)
+                
+                logger.info("Falling back to Yahoo Finance")
+                try:
                     overview_data = await self._get_yahoo_finance_data(ticker)
+                    if not overview_data:
+                        raise ValueError("Empty response from Yahoo Finance")
+                    logger.info(f"Successfully retrieved data from Yahoo Finance: {str(overview_data)[:200]}")
+                except Exception as e:
+                    error_msg = f"Yahoo Finance API error: {str(e)}"
+                    logger.error(error_msg)
+                    error_details.append(error_msg)
+                    raise ValueError(f"Both data sources failed. Errors: {', '.join(error_details)}")
+            
+            if not overview_data:
+                raise ValueError("No data retrieved from any source")
             
             # Get news data with fallback
-            news_data = await self._get_news_data_with_fallback(company_name, ticker)
+            news_data = []
+            try:
+                news_data = await self._get_news_data_with_fallback(company_name, ticker)
+            except Exception as e:
+                error_msg = f"Error fetching news data: {str(e)}"
+                logger.error(error_msg)
+                error_details.append(error_msg)
             
-            logger.info("Company data retrieved successfully")
+            # Validate required fields
+            required_fields = {
+                "price": overview_data.get("regularMarketPrice", overview_data.get("price")),
+                "change_percent": overview_data.get("regularMarketChangePercent", overview_data.get("change_percent")),
+                "volume": overview_data.get("regularMarketVolume", overview_data.get("volume"))
+            }
             
-            # Prepare response
+            missing_fields = [field for field, value in required_fields.items() if value is None or value == 0]
+            if missing_fields:
+                error_msg = f"Missing or invalid required fields: {', '.join(missing_fields)}"
+                logger.error(error_msg)
+                error_details.append(error_msg)
+                raise ValueError(error_msg)
+            
+            # Prepare response with detailed logging
             response = {
                 "company_info": {
                     "name": company_name,
-                    "description": overview_data.get("Description", "Company overview not available"),
-                    "sector": overview_data.get("Sector", "Sector not available"),
-                    "industry": overview_data.get("Industry", "Industry not available")
+                    "description": overview_data.get("Description", overview_data.get("description", "N/A")),
+                    "sector": overview_data.get("Sector", overview_data.get("sector", "N/A")),
+                    "industry": overview_data.get("Industry", overview_data.get("industry", "N/A"))
                 },
                 "financial_data": {
-                    "revenue": overview_data.get("RevenueTTM", "N/A"),
-                    "gross_profit": overview_data.get("GrossProfitTTM", "N/A"),
-                    "operating_margin": overview_data.get("OperatingMarginTTM", "N/A"),
-                    "pe_ratio": overview_data.get("PERatio", "N/A"),
+                    "revenue": overview_data.get("RevenueTTM", overview_data.get("totalRevenue", "N/A")),
+                    "gross_profit": overview_data.get("GrossProfitTTM", overview_data.get("grossProfit", "N/A")),
+                    "operating_margin": overview_data.get("OperatingMarginTTM", overview_data.get("operatingMargins", "N/A")),
+                    "pe_ratio": overview_data.get("PERatio", overview_data.get("trailingPE", "N/A")),
                     "market_cap": overview_data.get("MarketCapitalization", "N/A"),
-                    "price": overview_data.get("price", "N/A"),
-                    "change_percent": overview_data.get("change_percent", "N/A"),
-                    "volume": overview_data.get("volume", "N/A"),
+                    "price": float(required_fields["price"]),
+                    "change_percent": float(required_fields["change_percent"]),
+                    "volume": int(required_fields["volume"]),
                     "week_52_high": overview_data.get("52WeekHigh", "N/A"),
                     "week_52_low": overview_data.get("52WeekLow", "N/A"),
-                    "totalRevenue": overview_data.get("RevenueTTM", "N/A"),
-                    "grossProfit": overview_data.get("GrossProfitTTM", "N/A"),
-                    "operatingIncome": overview_data.get("OperatingIncome", "N/A"),
-                    "netIncome": overview_data.get("NetIncome", "N/A"),
-                    "EPS": overview_data.get("EPS", "N/A"),
-                    "PERatio": overview_data.get("PERatio", "N/A"),
-                    "OperatingMarginTTM": overview_data.get("OperatingMarginTTM", "N/A"),
-                    "ReturnOnEquityTTM": overview_data.get("ReturnOnEquityTTM", "N/A"),
-                    "ReturnOnAssetsTTM": overview_data.get("ReturnOnAssetsTTM", "N/A")
+                    "totalRevenue": overview_data.get("totalRevenue", overview_data.get("RevenueTTM", "N/A")),
+                    "grossProfit": overview_data.get("grossProfit", overview_data.get("GrossProfitTTM", "N/A")),
+                    "operatingIncome": overview_data.get("operatingIncome", overview_data.get("OperatingIncome", "N/A")),
+                    "netIncome": overview_data.get("netIncome", overview_data.get("NetIncome", "N/A")),
+                    "EPS": overview_data.get("EPS", overview_data.get("trailingEps", "N/A")),
+                    "PERatio": overview_data.get("PERatio", overview_data.get("trailingPE", "N/A")),
+                    "OperatingMarginTTM": overview_data.get("OperatingMarginTTM", overview_data.get("operatingMargins", "N/A")),
+                    "ReturnOnEquityTTM": overview_data.get("ReturnOnEquityTTM", overview_data.get("returnOnEquity", "N/A")),
+                    "ReturnOnAssetsTTM": overview_data.get("ReturnOnAssetsTTM", overview_data.get("returnOnAssets", "N/A")),
+                    "Beta": overview_data.get("Beta", "N/A"),
+                    "50DayMovingAverage": overview_data.get("50DayMovingAverage", "N/A"),
+                    "200DayMovingAverage": overview_data.get("200DayMovingAverage", "N/A")
                 },
-                "news_data": news_data
+                "market_data": {
+                    "regularMarketPrice": float(required_fields["price"]),
+                    "regularMarketChangePercent": float(required_fields["change_percent"]),
+                    "regularMarketVolume": int(required_fields["volume"]),
+                    "MarketCapitalization": overview_data.get("MarketCapitalization", "N/A"),
+                    "Beta": overview_data.get("Beta", "N/A"),
+                    "52WeekHigh": overview_data.get("52WeekHigh", "N/A"),
+                    "52WeekLow": overview_data.get("52WeekLow", "N/A"),
+                    "50DayMovingAverage": overview_data.get("50DayMovingAverage", "N/A"),
+                    "200DayMovingAverage": overview_data.get("200DayMovingAverage", "N/A")
+                },
+                "news_data": news_data,
+                "error_details": error_details if error_details else None
             }
             
-            logger.info("Successfully prepared response data")
+            # Log the response data
+            logger.info(f"Successfully prepared response data: {str(response)[:200]}")
             return response
             
         except Exception as e:
-            logger.error(f"Error in search process: {str(e)}", exc_info=True)
-            return {
-                "company_info": {
-                    "name": company_name,
-                    "description": "Data temporarily unavailable",
-                    "sector": "Not available",
-                    "industry": "Not available"
-                },
-                "financial_data": {
-                    "revenue": "N/A",
-                    "gross_profit": "N/A",
-                    "operating_margin": "N/A",
-                    "pe_ratio": "N/A",
-                    "market_cap": "N/A",
-                    "price": "N/A",
-                    "change_percent": "N/A",
-                    "volume": "N/A",
-                    "week_52_high": "N/A",
-                    "week_52_low": "N/A",
-                    "totalRevenue": "N/A",
-                    "grossProfit": "N/A",
-                    "operatingIncome": "N/A",
-                    "netIncome": "N/A",
-                    "EPS": "N/A",
-                    "PERatio": "N/A",
-                    "OperatingMarginTTM": "N/A",
-                    "ReturnOnEquityTTM": "N/A",
-                    "ReturnOnAssetsTTM": "N/A"
-                },
-                "news_data": []
-            }
+            error_msg = f"Search process failed: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            error_details.append(error_msg)
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "Failed to process company research",
+                    "message": str(e),
+                    "error_details": error_details
+                }
+            )
 
     async def _get_company_data_with_retry(self, ticker: str) -> Dict[str, Any]:
         """Get company data from Alpha Vantage with retry logic."""
+        last_error = None
         for attempt in range(self.max_retries):
             try:
                 if attempt > 0:
@@ -215,13 +253,20 @@ class SearchAgent(BaseAgent):
                 logger.info(f"Making Alpha Vantage API call for company overview: {ticker}")
                 overview_response = requests.get(self.base_url, params=overview_params)
                 logger.info(f"Overview API Response Status: {overview_response.status_code}")
-                logger.info(f"Overview API Response: {overview_response.text[:200]}...")
-                overview_data = overview_response.json()
                 
-                # Check if we got an error response
-                if "Error Message" in overview_data or "Information" in overview_data:
-                    logger.error(f"Error in overview data: {overview_data}")
-                    raise ValueError(f"Alpha Vantage API error: {overview_data}")
+                if overview_response.status_code != 200:
+                    raise ValueError(f"Overview API failed with status code: {overview_response.status_code}")
+                
+                overview_data = overview_response.json()
+                logger.info(f"Overview API Response: {str(overview_data)[:200]}...")
+                
+                # Check if we got an error response or empty data
+                if not overview_data or len(overview_data) <= 1:
+                    raise ValueError("Empty response from overview API")
+                if "Error Message" in overview_data:
+                    raise ValueError(f"Alpha Vantage API error in overview: {overview_data['Error Message']}")
+                if "Information" in overview_data:
+                    raise ValueError(f"Alpha Vantage API limit: {overview_data['Information']}")
                 
                 # Add delay to avoid rate limiting
                 time.sleep(12)  # Alpha Vantage rate limit
@@ -235,13 +280,20 @@ class SearchAgent(BaseAgent):
                 logger.info(f"Making Alpha Vantage API call for quote data: {ticker}")
                 quote_response = requests.get(self.base_url, params=quote_params)
                 logger.info(f"Quote API Response Status: {quote_response.status_code}")
-                logger.info(f"Quote API Response: {quote_response.text[:200]}...")
+                
+                if quote_response.status_code != 200:
+                    raise ValueError(f"Quote API failed with status code: {quote_response.status_code}")
+                
                 quote_data = quote_response.json()
+                logger.info(f"Quote API Response: {str(quote_data)[:200]}...")
 
-                # Check if we got an error response
-                if "Error Message" in quote_data or "Information" in quote_data:
-                    logger.error(f"Error in quote data: {quote_data}")
-                    raise ValueError(f"Alpha Vantage API error: {quote_data}")
+                # Check if we got an error response or empty data
+                if not quote_data or "Global Quote" not in quote_data or not quote_data["Global Quote"]:
+                    raise ValueError("Empty response from quote API")
+                if "Error Message" in quote_data:
+                    raise ValueError(f"Alpha Vantage API error in quote: {quote_data['Error Message']}")
+                if "Information" in quote_data:
+                    raise ValueError(f"Alpha Vantage API limit: {quote_data['Information']}")
 
                 # Add delay to avoid rate limiting
                 time.sleep(12)  # Alpha Vantage rate limit
@@ -255,91 +307,144 @@ class SearchAgent(BaseAgent):
                 logger.info(f"Making Alpha Vantage API call for income statement: {ticker}")
                 income_response = requests.get(self.base_url, params=income_params)
                 logger.info(f"Income API Response Status: {income_response.status_code}")
-                logger.info(f"Income API Response: {income_response.text[:200]}...")
+                
+                if income_response.status_code != 200:
+                    raise ValueError(f"Income API failed with status code: {income_response.status_code}")
+                
                 income_data = income_response.json()
+                logger.info(f"Income API Response: {str(income_data)[:200]}...")
 
-                # Check if we got an error response
-                if "Error Message" in income_data or "Information" in income_data:
-                    logger.error(f"Error in income data: {income_data}")
-                    raise ValueError(f"Alpha Vantage API error: {income_data}")
+                # Check if we got an error response or empty data
+                if not income_data or "annualReports" not in income_data or not income_data["annualReports"]:
+                    raise ValueError("Empty response from income API")
+                if "Error Message" in income_data:
+                    raise ValueError(f"Alpha Vantage API error in income: {income_data['Error Message']}")
+                if "Information" in income_data:
+                    raise ValueError(f"Alpha Vantage API limit: {income_data['Information']}")
 
-                # Combine and validate the data
-                combined_data = {
-                    "Description": overview_data.get("Description", "No description available"),
-                    "Sector": overview_data.get("Sector", "Sector not available"),
-                    "Industry": overview_data.get("Industry", "Industry not available"),
-                    "MarketCapitalization": overview_data.get("MarketCapitalization", "N/A"),
-                    "PERatio": overview_data.get("PERatio", "N/A"),
-                    "RevenueTTM": overview_data.get("RevenueTTM", "N/A"),
-                    "GrossProfitTTM": overview_data.get("GrossProfitTTM", "N/A"),
-                    "OperatingMarginTTM": overview_data.get("OperatingMarginTTM", "N/A"),
-                    "NetIncome": overview_data.get("NetIncome", "N/A"),
-                    "EPS": overview_data.get("EPS", "N/A"),
-                    "ReturnOnEquityTTM": overview_data.get("ReturnOnEquityTTM", "N/A"),
-                    "ReturnOnAssetsTTM": overview_data.get("ReturnOnAssetsTTM", "N/A"),
-                    "52WeekHigh": overview_data.get("52WeekHigh", "N/A"),
-                    "52WeekLow": overview_data.get("52WeekLow", "N/A")
-                }
-
-                # Add current market data if available
+                # Process quote data
+                quote_info = {}
                 if "Global Quote" in quote_data:
                     quote = quote_data["Global Quote"]
-                    price = quote.get("05. price", "N/A")
-                    change_percent = quote.get("10. change percent", "0%").rstrip('%')
-                    volume = quote.get("06. volume", "N/A")
-                    
-                    combined_data.update({
-                        "price": price,
-                        "change_percent": change_percent,
-                        "volume": volume
-                    })
-                else:
-                    combined_data.update({
-                        "price": "N/A",
-                        "change_percent": "N/A",
-                        "volume": "N/A"
-                    })
+                    try:
+                        quote_info = {
+                            "regularMarketPrice": float(quote.get("05. price", 0)),
+                            "regularMarketChangePercent": float(quote.get("10. change percent", "0").rstrip('%')),
+                            "regularMarketVolume": int(quote.get("06. volume", 0)),
+                            "price": float(quote.get("05. price", 0)),
+                            "change_percent": float(quote.get("10. change percent", "0").rstrip('%')),
+                            "volume": int(quote.get("06. volume", 0))
+                        }
+                    except (ValueError, TypeError) as e:
+                        raise ValueError(f"Error processing quote data: {str(e)}")
 
-                # Add income statement data if available
+                # Process income statement data
+                income_info = {}
                 if "annualReports" in income_data and len(income_data["annualReports"]) > 0:
                     latest_report = income_data["annualReports"][0]
-                    combined_data.update({
-                        "totalRevenue": latest_report.get("totalRevenue", "N/A"),
-                        "grossProfit": latest_report.get("grossProfit", "N/A"),
-                        "operatingIncome": latest_report.get("operatingIncome", "N/A"),
-                        "netIncome": latest_report.get("netIncome", "N/A")
-                    })
+                    try:
+                        income_info = {
+                            "totalRevenue": latest_report.get("totalRevenue"),
+                            "grossProfit": latest_report.get("grossProfit"),
+                            "operatingIncome": latest_report.get("operatingIncome"),
+                            "netIncome": latest_report.get("netIncome")
+                        }
+                    except Exception as e:
+                        raise ValueError(f"Error processing income data: {str(e)}")
 
-                logger.info("Successfully retrieved and combined company data")
+                # Combine all data
+                combined_data = {
+                    **overview_data,  # Base data from overview
+                    **quote_info,     # Add quote data
+                    **income_info     # Add income statement data
+                }
+
+                # Validate combined data
+                if not any(value for value in combined_data.values() if value not in [None, "", "None", "N/A", 0]):
+                    raise ValueError("No valid data after combining all sources")
+
+                logger.info(f"Successfully combined all data: {str(combined_data)[:200]}...")
                 return combined_data
 
             except Exception as e:
-                logger.error(f"Attempt {attempt + 1}/{self.max_retries} failed: {str(e)}")
+                last_error = str(e)
+                logger.error(f"Attempt {attempt + 1}/{self.max_retries} failed: {last_error}")
                 if attempt == self.max_retries - 1:
-                    # Return a structured response even if the API calls fail
-                    return {
-                        "Description": "Data temporarily unavailable due to API rate limits or connection issues. Please try again later.",
-                        "Sector": "Technology",  # Default for Tesla
-                        "Industry": "Auto Manufacturers",  # Default for Tesla
-                        "MarketCapitalization": "N/A",
-                        "PERatio": "N/A",
-                        "RevenueTTM": "N/A",
-                        "GrossProfitTTM": "N/A",
-                        "OperatingMarginTTM": "N/A",
-                        "NetIncome": "N/A",
-                        "EPS": "N/A",
-                        "ReturnOnEquityTTM": "N/A",
-                        "ReturnOnAssetsTTM": "N/A",
-                        "52WeekHigh": "N/A",
-                        "52WeekLow": "N/A",
-                        "price": "N/A",
-                        "change_percent": "N/A",
-                        "volume": "N/A",
-                        "totalRevenue": "N/A",
-                        "grossProfit": "N/A",
-                        "operatingIncome": "N/A",
-                        "netIncome": "N/A"
-                    }
+                    raise ValueError(f"All Alpha Vantage attempts failed: {last_error}")
+                    
+    async def _get_yahoo_finance_data(self, ticker: str) -> Dict[str, Any]:
+        """Get financial data from Yahoo Finance."""
+        try:
+            logger.info(f"Fetching Yahoo Finance data for ticker: {ticker}")
+            # Get the ticker info
+            stock = yf.Ticker(ticker)
+            
+            # Get both info and financials
+            info = stock.info
+            if not info:
+                raise ValueError("No data received from Yahoo Finance info")
+            logger.info(f"Received Yahoo Finance info data: {str(info)[:200]}...")
+            
+            # Get additional financial data
+            try:
+                financials = stock.financials.iloc[0] if not stock.financials.empty else {}
+                balance_sheet = stock.balance_sheet.iloc[0] if not stock.balance_sheet.empty else {}
+                logger.info("Successfully retrieved additional financial data")
+            except Exception as e:
+                logger.warning(f"Could not get detailed financials: {str(e)}")
+                financials = {}
+                balance_sheet = {}
+            
+            # Validate required fields
+            required_fields = {
+                "regularMarketPrice": info.get("regularMarketPrice", info.get("currentPrice")),
+                "regularMarketVolume": info.get("regularMarketVolume", info.get("volume")),
+                "sector": info.get("sector"),
+                "industry": info.get("industry")
+            }
+            
+            missing_fields = [field for field, value in required_fields.items() if value is None]
+            if missing_fields:
+                raise ValueError(f"Missing required fields from Yahoo Finance: {', '.join(missing_fields)}")
+            
+            # Map Yahoo Finance data to our format with detailed logging
+            data = {
+                "Description": info.get("longBusinessSummary", info.get("description")),
+                "Sector": info.get("sector"),
+                "Industry": info.get("industry"),
+                "MarketCapitalization": str(info.get("marketCap")),
+                "PERatio": str(info.get("trailingPE", info.get("forwardPE"))),
+                "RevenueTTM": str(info.get("totalRevenue", financials.get("Total Revenue"))),
+                "GrossProfitTTM": str(info.get("grossProfits", financials.get("Gross Profit"))),
+                "OperatingMarginTTM": str(info.get("operatingMargins")),
+                "NetIncome": str(info.get("netIncomeToCommon", financials.get("Net Income"))),
+                "EPS": str(info.get("trailingEps", info.get("forwardEps"))),
+                "ReturnOnEquityTTM": str(info.get("returnOnEquity")),
+                "ReturnOnAssetsTTM": str(info.get("returnOnAssets")),
+                "52WeekHigh": str(info.get("fiftyTwoWeekHigh")),
+                "52WeekLow": str(info.get("fiftyTwoWeekLow")),
+                "regularMarketPrice": float(info.get("regularMarketPrice", info.get("currentPrice", 0))),
+                "regularMarketChangePercent": float(info.get("regularMarketChangePercent", info.get("priceToSalesTrailing12Months", 0))),
+                "regularMarketVolume": int(info.get("regularMarketVolume", info.get("volume", 0))),
+                "price": float(info.get("regularMarketPrice", info.get("currentPrice", 0))),
+                "change_percent": float(info.get("regularMarketChangePercent", info.get("priceToSalesTrailing12Months", 0))),
+                "volume": int(info.get("regularMarketVolume", info.get("volume", 0))),
+                "OperatingIncome": str(info.get("operatingIncome", financials.get("Operating Income"))),
+                "Beta": str(info.get("beta")),
+                "50DayMovingAverage": str(info.get("fiftyDayAverage")),
+                "200DayMovingAverage": str(info.get("twoHundredDayAverage"))
+            }
+            
+            # Validate the data
+            if not any(value for value in data.values() if value not in [None, "None", "0", 0]):
+                raise ValueError("No valid data retrieved from Yahoo Finance")
+            
+            logger.info(f"Processed Yahoo Finance data: {str(data)[:200]}...")
+            return data
+            
+        except Exception as e:
+            logger.error(f"Yahoo Finance data retrieval failed: {str(e)}", exc_info=True)
+            raise ValueError(f"Yahoo Finance error: {str(e)}")
 
     async def _get_news_data_with_fallback(self, company_name: str, ticker: str) -> list:
         """Get news data with fallback options."""
@@ -418,56 +523,4 @@ class SearchAgent(BaseAgent):
             ]
         except Exception as e:
             logger.error(f"Web search fallback failed: {str(e)}")
-            return []
-
-    async def _get_yahoo_finance_data(self, ticker: str) -> Dict[str, Any]:
-        """Get financial data from Yahoo Finance."""
-        try:
-            # Get the ticker info
-            stock = yf.Ticker(ticker)
-            info = stock.info
-            
-            # Map Yahoo Finance data to our format
-            return {
-                "Description": info.get("longBusinessSummary", "No description available"),
-                "Sector": info.get("sector", "Sector not available"),
-                "Industry": info.get("industry", "Industry not available"),
-                "MarketCapitalization": str(info.get("marketCap", "N/A")),
-                "PERatio": str(info.get("trailingPE", "N/A")),
-                "RevenueTTM": str(info.get("totalRevenue", "N/A")),
-                "GrossProfitTTM": str(info.get("grossProfits", "N/A")),
-                "OperatingMarginTTM": str(info.get("operatingMargins", "N/A")),
-                "NetIncome": str(info.get("netIncomeToCommon", "N/A")),
-                "EPS": str(info.get("trailingEps", "N/A")),
-                "ReturnOnEquityTTM": str(info.get("returnOnEquity", "N/A")),
-                "ReturnOnAssetsTTM": str(info.get("returnOnAssets", "N/A")),
-                "52WeekHigh": str(info.get("fiftyTwoWeekHigh", "N/A")),
-                "52WeekLow": str(info.get("fiftyTwoWeekLow", "N/A")),
-                "price": str(info.get("regularMarketPrice", "N/A")),
-                "change_percent": str(info.get("regularMarketChangePercent", "N/A")),
-                "volume": str(info.get("regularMarketVolume", "N/A")),
-                "OperatingIncome": str(info.get("operatingIncome", "N/A"))
-            }
-            
-        except Exception as e:
-            logger.error(f"Yahoo Finance data retrieval failed: {str(e)}")
-            return {
-                "Description": "Data temporarily unavailable",
-                "Sector": "Technology",  # Default for Tesla
-                "Industry": "Auto Manufacturers",  # Default for Tesla
-                "MarketCapitalization": "N/A",
-                "PERatio": "N/A",
-                "RevenueTTM": "N/A",
-                "GrossProfitTTM": "N/A",
-                "OperatingMarginTTM": "N/A",
-                "NetIncome": "N/A",
-                "EPS": "N/A",
-                "ReturnOnEquityTTM": "N/A",
-                "ReturnOnAssetsTTM": "N/A",
-                "52WeekHigh": "N/A",
-                "52WeekLow": "N/A",
-                "price": "N/A",
-                "change_percent": "N/A",
-                "volume": "N/A",
-                "OperatingIncome": "N/A"
-            } 
+            return [] 

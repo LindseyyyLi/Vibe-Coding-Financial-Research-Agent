@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
-from .agents.manager import ManagerAgent
+from app.agents.manager import ManagerAgent
 import logging
 import asyncio
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -36,15 +36,24 @@ class FinancialData(BaseModel):
     operating_margin: Optional[str] = None
     pe_ratio: Optional[str] = None
     market_cap: Optional[str] = None
-    price: Optional[float] = None
-    change_percent: Optional[float] = None
-    volume: Optional[int] = None
+    price: Optional[float] = 0.0
+    change_percent: Optional[float] = 0.0
+    volume: Optional[int] = 0
     week_52_high: Optional[str] = None
     week_52_low: Optional[str] = None
+    totalRevenue: Optional[str] = None
+    grossProfit: Optional[str] = None
+    operatingIncome: Optional[str] = None
+    netIncome: Optional[str] = None
+    EPS: Optional[str] = None
+    PERatio: Optional[str] = None
+    OperatingMarginTTM: Optional[str] = None
+    ReturnOnEquityTTM: Optional[str] = None
+    ReturnOnAssetsTTM: Optional[str] = None
 
     class Config:
-        extra = "allow"  # Allow extra fields in the data
-        populate_by_name = True  # Allow both alias and field name to be used
+        extra = "allow"
+        populate_by_name = True
         json_schema_extra = {
             "example": {
                 "revenue": "10B",
@@ -59,6 +68,21 @@ class FinancialData(BaseModel):
                 "week_52_low": "120.00"
             }
         }
+
+class MarketData(BaseModel):
+    regularMarketPrice: float = 0.0
+    regularMarketChangePercent: float = 0.0
+    regularMarketVolume: int = 0
+    MarketCapitalization: Optional[str] = None
+    Beta: Optional[str] = None
+    week_52_high: Optional[str] = Field(None, alias="52WeekHigh")
+    week_52_low: Optional[str] = Field(None, alias="52WeekLow")
+    moving_average_50: Optional[str] = Field(None, alias="50DayMovingAverage")
+    moving_average_200: Optional[str] = Field(None, alias="200DayMovingAverage")
+
+    class Config:
+        populate_by_name = True
+        allow_population_by_field_name = True
 
 class FinancialAnalysis(BaseModel):
     financial_health: str
@@ -75,6 +99,7 @@ class NewsItem(BaseModel):
 class CompanyResponse(BaseModel):
     company_info: CompanyInfo
     financial_data: FinancialData
+    market_data: MarketData
     financial_analysis: FinancialAnalysis
     potential_risks: List[str]
     news_data: List[NewsItem]

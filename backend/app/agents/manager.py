@@ -75,30 +75,41 @@ class ManagerAgent(BaseAgent):
             response = {
                 "company_info": {
                     "name": company_name,
-                    "description": company_data.get("Description", "Company overview not available"),
-                    "sector": company_data.get("Sector", "Sector not available"),
-                    "industry": company_data.get("Industry", "Industry not available")
+                    "description": company_data.get("company_info", {}).get("description", "Company overview not available"),
+                    "sector": company_data.get("company_info", {}).get("sector", "Sector not available"),
+                    "industry": company_data.get("company_info", {}).get("industry", "Industry not available")
                 },
                 "financial_data": {
-                    "revenue": company_data.get("RevenueTTM", "N/A"),
-                    "gross_profit": company_data.get("GrossProfitTTM", "N/A"),
-                    "operating_margin": company_data.get("OperatingMarginTTM", "N/A"),
-                    "pe_ratio": company_data.get("PERatio", "N/A"),
-                    "market_cap": company_data.get("MarketCapitalization", "N/A"),
-                    "price": company_data.get("price", "N/A"),
-                    "change_percent": company_data.get("change_percent", "N/A"),
-                    "volume": company_data.get("volume", "N/A"),
-                    "week_52_high": company_data.get("52WeekHigh", "N/A"),
-                    "week_52_low": company_data.get("52WeekLow", "N/A"),
-                    "totalRevenue": company_data.get("totalRevenue", "N/A"),
-                    "grossProfit": company_data.get("grossProfit", "N/A"),
-                    "operatingIncome": company_data.get("operatingIncome", "N/A"),
-                    "netIncome": company_data.get("netIncome", "N/A"),
-                    "EPS": company_data.get("EPS", "N/A"),
-                    "PERatio": company_data.get("PERatio", "N/A"),
-                    "OperatingMarginTTM": company_data.get("OperatingMarginTTM", "N/A"),
-                    "ReturnOnEquityTTM": company_data.get("ReturnOnEquityTTM", "N/A"),
-                    "ReturnOnAssetsTTM": company_data.get("ReturnOnAssetsTTM", "N/A")
+                    "revenue": company_data.get("financial_data", {}).get("revenue", "N/A"),
+                    "gross_profit": company_data.get("financial_data", {}).get("gross_profit", "N/A"),
+                    "operating_margin": company_data.get("financial_data", {}).get("operating_margin", "N/A"),
+                    "pe_ratio": company_data.get("financial_data", {}).get("pe_ratio", "N/A"),
+                    "market_cap": company_data.get("financial_data", {}).get("market_cap", "N/A"),
+                    "price": float(company_data.get("financial_data", {}).get("price", 0.0)),
+                    "change_percent": float(company_data.get("financial_data", {}).get("change_percent", 0.0)),
+                    "volume": int(company_data.get("financial_data", {}).get("volume", 0)),
+                    "week_52_high": company_data.get("financial_data", {}).get("week_52_high", "N/A"),
+                    "week_52_low": company_data.get("financial_data", {}).get("week_52_low", "N/A"),
+                    "totalRevenue": company_data.get("financial_data", {}).get("totalRevenue", "N/A"),
+                    "grossProfit": company_data.get("financial_data", {}).get("grossProfit", "N/A"),
+                    "operatingIncome": company_data.get("financial_data", {}).get("operatingIncome", "N/A"),
+                    "netIncome": company_data.get("financial_data", {}).get("netIncome", "N/A"),
+                    "EPS": company_data.get("financial_data", {}).get("EPS", "N/A"),
+                    "PERatio": company_data.get("financial_data", {}).get("PERatio", "N/A"),
+                    "OperatingMarginTTM": company_data.get("financial_data", {}).get("OperatingMarginTTM", "N/A"),
+                    "ReturnOnEquityTTM": company_data.get("financial_data", {}).get("ReturnOnEquityTTM", "N/A"),
+                    "ReturnOnAssetsTTM": company_data.get("financial_data", {}).get("ReturnOnAssetsTTM", "N/A")
+                },
+                "market_data": {
+                    "regularMarketPrice": float(company_data.get("financial_data", {}).get("price", 0.0)),
+                    "regularMarketChangePercent": float(company_data.get("financial_data", {}).get("change_percent", 0.0)),
+                    "regularMarketVolume": int(company_data.get("financial_data", {}).get("volume", 0)),
+                    "MarketCapitalization": company_data.get("financial_data", {}).get("market_cap", "N/A"),
+                    "Beta": company_data.get("financial_data", {}).get("Beta", "N/A"),
+                    "52WeekHigh": company_data.get("financial_data", {}).get("week_52_high", "N/A"),
+                    "52WeekLow": company_data.get("financial_data", {}).get("week_52_low", "N/A"),
+                    "50DayMovingAverage": company_data.get("financial_data", {}).get("50DayMovingAverage", "N/A"),
+                    "200DayMovingAverage": company_data.get("financial_data", {}).get("200DayMovingAverage", "N/A")
                 },
                 "financial_analysis": {
                     "financial_health": financial_analysis.get("financial_health", "Financial health analysis not available"),
@@ -107,15 +118,7 @@ class ManagerAgent(BaseAgent):
                     "key_metrics_analysis": financial_analysis.get("key_metrics_analysis", "Key metrics analysis not available")
                 },
                 "potential_risks": risk_assessment.get("risks", ["Risk assessment not available"]),
-                "news_data": [
-                    {
-                        "title": article.get("title", ""),
-                        "description": article.get("description", ""),
-                        "url": article.get("url", ""),
-                        "publishedAt": article.get("publishedAt", "")
-                    }
-                    for article in company_data.get("news_data", [])
-                ],
+                "news_data": company_data.get("news_data", []),
                 "sources": [article.get("url", "") for article in company_data.get("news_data", [])]
             }
             
@@ -152,6 +155,17 @@ class ManagerAgent(BaseAgent):
                     "OperatingMarginTTM": "N/A",
                     "ReturnOnEquityTTM": "N/A",
                     "ReturnOnAssetsTTM": "N/A"
+                },
+                "market_data": {
+                    "regularMarketPrice": 0.0,
+                    "regularMarketChangePercent": 0.0,
+                    "regularMarketVolume": 0,
+                    "MarketCapitalization": "N/A",
+                    "Beta": "N/A",
+                    "52WeekHigh": "N/A",
+                    "52WeekLow": "N/A",
+                    "50DayMovingAverage": "N/A",
+                    "200DayMovingAverage": "N/A"
                 },
                 "financial_analysis": {
                     "financial_health": "Analysis failed",

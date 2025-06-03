@@ -44,11 +44,31 @@ export interface CompanyData {
         operating_margin: string;
         pe_ratio: string;
         market_cap: string;
-        price: string;
-        change_percent: string;
-        volume: string;
-        '52_week_high': string;
-        '52_week_low': string;
+        price: number;
+        change_percent: number;
+        volume: number;
+        week_52_high: string;
+        week_52_low: string;
+        totalRevenue: string;
+        grossProfit: string;
+        operatingIncome: string;
+        netIncome: string;
+        EPS: string;
+        PERatio: string;
+        OperatingMarginTTM: string;
+        ReturnOnEquityTTM: string;
+        ReturnOnAssetsTTM: string;
+    };
+    market_data: {
+        regularMarketPrice: number;
+        regularMarketChangePercent: number;
+        regularMarketVolume: number;
+        MarketCapitalization: string;
+        Beta: string;
+        "52WeekHigh": string;
+        "52WeekLow": string;
+        "50DayMovingAverage": string;
+        "200DayMovingAverage": string;
     };
     financial_analysis: {
         financial_health: string;

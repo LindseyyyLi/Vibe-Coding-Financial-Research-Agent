@@ -3,16 +3,7 @@
 import { useState } from 'react';
 import CompanySearch from '../components/CompanySearch';
 import CompanyReport from '../components/CompanyReport';
-
-interface CompanyData {
-    company_name: string;
-    overview: string;
-    financial_metrics: {
-        [key: string]: any;
-    };
-    potential_risks: string[];
-    sources: string[];
-}
+import { CompanyData } from '../services/api';
 
 export default function Home() {
     const [companyData, setCompanyData] = useState<CompanyData | null>(null);

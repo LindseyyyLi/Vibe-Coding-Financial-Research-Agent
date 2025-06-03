@@ -1,58 +1,5 @@
 import React from 'react';
-
-interface CompanyData {
-    company_info: {
-        name: string;
-        description: string;
-        sector: string;
-        industry: string;
-    };
-    financial_data: {
-        revenue: string;
-        gross_profit: string;
-        operating_margin: string;
-        pe_ratio: string;
-        market_cap: string;
-        price: string;
-        change_percent: string;
-        volume: string;
-        week_52_high: string;
-        week_52_low: string;
-        totalRevenue: string;
-        grossProfit: string;
-        operatingIncome: string;
-        netIncome: string;
-        EPS: string;
-        PERatio: string;
-        OperatingMarginTTM: string;
-        ReturnOnEquityTTM: string;
-        ReturnOnAssetsTTM: string;
-    };
-    market_data: {
-        regularMarketPrice: number;
-        regularMarketChangePercent: number;
-        regularMarketVolume: number;
-        MarketCapitalization: string;
-        Beta: string;
-        "52WeekHigh": string;
-        "52WeekLow": string;
-        "50DayMovingAverage": string;
-        "200DayMovingAverage": string;
-    };
-    financial_analysis: {
-        financial_health: string;
-        market_position: string;
-        growth_potential: string;
-        key_metrics_analysis: string;
-    };
-    potential_risks: string[];
-    news_data: Array<{
-        title: string;
-        description: string;
-        url: string;
-        publishedAt: string;
-    }>;
-}
+import { CompanyData } from '../services/api';
 
 interface CompanyReportProps {
     data: CompanyData;
