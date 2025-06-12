@@ -153,3 +153,9 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Yahoo Finance for financial data
 - News API for current events integration
 - The open-source community for various tools and libraries used in this project
+
+## Example Usage
+
+![example](https://github.com/user-attachments/assets/7c2d41cb-ded0-4d46-be48-9f1337c4eca7)
+
+
